@@ -70,7 +70,10 @@ async function render(run, requested, records, params = new URLSearchParams()) {
   put('#tolerance',`${run.tolerance_seconds} s`);
   download.href = `${base}/export`;
   download.hidden = false;
-  put('#statusbar',`${run.id.slice(0,12)} · ${audit.hours.balanced ? '柜时账一致' : '柜时账有差异'}`);
+  const continuationNote = run.kind === 'continuation'
+    ? (run.continuation.published ? ' · 接续已发布' : ' · 接续停发')
+    : '';
+  put('#statusbar',`${run.id.slice(0,12)} · ${audit.hours.balanced ? '柜时账一致' : '柜时账有差异'}${continuationNote}`);
   content.hidden = false;
   content.setAttribute('aria-busy','false');
 }

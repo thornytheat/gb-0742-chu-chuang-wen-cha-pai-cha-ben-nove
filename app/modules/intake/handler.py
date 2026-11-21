@@ -14,4 +14,5 @@ def samples():
 @router.get("/runs/{run_id}/intake")
 def intake(archive: Archive):
     _, snapshot, _ = archive
-    return {**snapshot["intake"], "rows": snapshot["rows"], "isolation": snapshot["isolation"]}
+    return {**snapshot["intake"], "rows": snapshot["rows"], "isolation": snapshot["isolation"],
+            "continuation": snapshot.get("continuation")}

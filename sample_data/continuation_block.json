@@ -1,0 +1,41 @@
+{
+  "sample": "continuation_block",
+  "label": "夜班接续冲突停发样例",
+  "shift": "N26-1121",
+  "start": "2026-11-20T08:00:00+08:00",
+  "end": "2026-11-20T12:00:00+08:00",
+  "cabinet_hours": [
+    {
+      "id": "CV-17",
+      "label": "北廊 · 青瓷橱窗",
+      "upper_mm": 1550,
+      "lower_mm": 550,
+      "temp_limit": "2.0",
+      "rh_limit": "8.0"
+    }
+  ],
+  "tolerance_seconds": 240,
+  "late_seconds": 900,
+  "sustained_hours": 2,
+  "deployments": [
+    {
+      "probe": "0001",
+      "cabinet": "CV-17",
+      "level": "upper",
+      "start": "2026-11-20T08:00:00+08:00",
+      "end": "2026-11-20T12:00:00+08:00"
+    },
+    {
+      "probe": "0012",
+      "cabinet": "CV-17",
+      "level": "lower",
+      "start": "2026-11-20T08:00:00+08:00",
+      "end": "2026-11-20T12:00:00+08:00"
+    }
+  ],
+  "tickets": [],
+  "sources": [
+    {"role": "first", "csv": "continuation-block-a.csv", "records": 6},
+    {"role": "second", "csv": "continuation-block-b.csv", "records": 4}
+  ]
+}

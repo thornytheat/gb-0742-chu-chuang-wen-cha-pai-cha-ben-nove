@@ -14,17 +14,24 @@ const rowLabel = (value) => value?.split(':').at(-1) ?? '—';
 
 async function intake({get, base, signal}) {
   const data = await get(`${base}/intake`);
-  q('#intake-summary').replaceChildren(entries([['图档编码',data.encoding],['记录段',data.segments],
-    ['物理行',data.physical],['数据记录',data.declared]]));
+  const sourceName = Object.fromEntries((data.continuation?.sources ?? []).map((item) => [item.role,item.csv]));
+  const sourceCards = data.continuation
+    ? data.continuation.sources.map((item) => entries([['原档',`${words[item.role]} · ${item.csv}`],
+        ['声明记录',item.records],['编码',item.encoding],['物理行',item.physical],['SHA-256',item.file_sha256]]))
+    : [entries([['图档编码',data.encoding],['记录段',data.segments],['物理行',data.physical],['数据记录',data.declared]])];
+  q('#intake-summary').replaceChildren(...sourceCards);
   q('#intake-isolation').replaceChildren(entries(Object.entries(data.isolation)),
     ...(!Object.keys(data.isolation).length ? [el('p','本档无隔离行。','empty')] : []));
   const filter = q('#reading-filter');
   const draw = () => {
     const rows = data.rows.filter((row) => filter.value === 'all' || (filter.value === 'late' ? row.flags?.includes('LATE_RECEIPT') : row.disposition === filter.value));
-    table(q('#readings'),rows,[['行',line,'num'],['探头',(row) => row.fields?.probe,'mono'],
+    const columns = [['行',line,'num'],
+      ...(data.continuation ? [['原档',(row) => row.source ? `${words[row.source]} · ${sourceName[row.source] ?? row.source_csv}` : '—','mono']] : []),
+      ['探头',(row) => row.fields?.probe,'mono'],
       ['测量',(row) => stamp(row.observed_utc),'mono'],['收报',(row) => stamp(row.received_utc),'mono'],
       ['温度 °C',(row) => row.celsius?.[0],'num'],['湿度 %RH',(row) => row.relative_humidity?.[0],'num'],
-      ['状态',(row) => state(row.disposition)],['原因码',(row) => row.code ?? row.flags?.join(' '),'mono'],['原始字段',raw]]);
+      ['状态',(row) => state(row.disposition)],['原因码',(row) => row.code ?? row.flags?.join(' '),'mono'],['原始字段',raw]];
+    table(q('#readings'),rows,columns);
   };
   filter.addEventListener('change',draw,{signal});
   draw();
@@ -60,9 +67,16 @@ async function pairing({get, base, cabinet}) {
   const data = await get(`${base}/pairing/${cabinet}`);
   const count = data.slots.filter(matched).length;
   q('#pair-summary').replaceChildren(entries([['容差',`${data.tolerance_seconds} s`],['应配',data.slots.length],['成对',count],['无配对',data.slots.length-count]]));
-  table(q('#pairs'),data.slots,[['柜时',(slot) => stamp(slot.start),'mono'],['上层行',(slot) => rowLabel(slot.upper),'num'],
-    ['下层行',(slot) => rowLabel(slot.lower),'num'],['时差 s','drift','num'],['证据',(slot) => state(slot.code ?? '已配对')]]);
-  table(q('#unpaired'),data.unused,[['行',(row) => rowLabel(row.id),'num'],['原因',(row) => words[row.code]]]);
+  const continued = data.slots.some((slot) => slot.authority);
+  const columns = [['柜时',(slot) => stamp(slot.start),'mono'],
+    ...(continued ? [['准档',(slot) => slot.authority ? state(slot.authority) : '—']] : []),
+    ...(continued ? [['接续依据',(slot) => words[slot.merge_reason] ?? slot.merge_reason]] : []),
+    ['上层行',(slot) => rowLabel(slot.upper),'num'],
+    ['下层行',(slot) => rowLabel(slot.lower),'num'],['时差 s','drift','num'],['证据',(slot) => state(slot.code ?? '已配对')]];
+  table(q('#pairs'),data.slots,columns);
+  table(q('#unpaired'),data.unused,[['行',(row) => rowLabel(row.id),'num'],
+    ...(continued ? [['原档',(row) => row.source ? words[row.source] : '—']] : []),
+    ['原因',(row) => words[row.code]]]);
 }
 
 function specimenReading(row) {
@@ -195,7 +209,7 @@ function audit({audit,run}) {
     ['柜时多键',hours.extra_keys.length],['柜时重键',hours.duplicate_keys.length]]));
 }
 
-function archive({history,run}) {
+function archive({history,run,get}) {
   const list = el('div',null,'history-list');
   for (const item of history) {
     const link = jump(`${item.shift} · ${item.id.slice(0,8)}`,'/archive',{run:item.id});
@@ -204,10 +218,44 @@ function archive({history,run}) {
   }
   q('#history').replaceChildren(list);
   q('#digests').classList.add('digest-list');
-  q('#digests').replaceChildren(entries([['归卷号',run.id],['原档 SHA-256',run.hashes.file_sha256],
+  q('#digests').replaceChildren(entries([['归卷号',run.id],
+    ...(run.kind === 'continuation'
+      ? [['原档 SHA-256',run.hashes.files_sha256.map((value) => el('span',value,'mono')).reduce((acc,node) => (acc.append(node),acc),el('div',null,'hash-stack'))]]
+      : [['原档 SHA-256',run.hashes.file_sha256]]),
     ['契约 SHA-256',run.hashes.contract_sha256],['结果 SHA-256',run.result_sha256]]));
   q('#archive-spec').replaceChildren(entries([['输入',run.file],['规则',run.policy],['配准容差',`${run.tolerance_seconds} s`],
     ['持续门槛',`${run.sustained_hours} h`],['耗时',`${run.elapsed_ms} ms`],['归卷柜号',run.cabinets.map((item) => item.id).join('、')]]));
+  return renderContinuation(run,get);
+}
+
+async function renderContinuation(run,get) {
+  const statusBox = q('#continuation-status');
+  if (run.kind !== 'continuation') {
+    statusBox.hidden = true;
+    q('#continuation-sources').replaceChildren();
+    q('#continuation-ledger').replaceChildren();
+    q('#continuation-conflicts').replaceChildren();
+    return;
+  }
+  const ledger = await get(`/api/runs/${run.id}/continuation`);
+  statusBox.hidden = false;
+  statusBox.classList.toggle('error',!ledger.published);
+  statusBox.textContent = ledger.published
+    ? `接续结论已发布 · 重叠柜时 ${ledger.overlap_hours.length} 个 · 柜时账摘要 ${ledger.ledger_sha256.slice(0,16)}`
+    : `发布停止 · 冲突涉及 ${ledger.blocked_hours.length} 个柜时，两份原档已保留`;
+  q('#continuation-sources').replaceChildren(...ledger.sources.map((item) => entries([
+    ['原档',`${words[item.role]} · ${item.csv}`],['原档 SHA-256',item.file_sha256],
+    ['声明记录',item.records],['成对柜时',item.paired_hours],
+    ['稳定/异常/缺证',`${item.stable} / ${item.abnormal} / ${item.missing}`]])));
+  table(q('#continuation-ledger'),ledger.slots,[['柜时',(slot) => stamp(slot.start),'mono'],
+    ['准档',(slot) => slot.authority_label ?? '—'],['覆盖原档',(slot) => slot.coverage.map((role) => words[role]).join('、') || '—'],
+    ['接续依据',(slot) => words[slot.merge_reason] ?? slot.merge_reason],
+    ['上层行',(slot) => rowLabel(slot.upper),'num'],['下层行',(slot) => rowLabel(slot.lower),'num'],
+    ['判级',(slot) => state(slot.state)]]);
+  if (ledger.conflicts.length) {
+    table(q('#continuation-conflicts'),ledger.conflicts,[['探头','probe','mono'],['测量时刻','measured_utc','mono'],
+      ['柜时','hour','mono'],['冲突原档',(point) => point.rows.map((row) => `${words[row.source]} ${row.temperature_c}°C`).join(' / '),'mono']]);
+  } else q('#continuation-conflicts').replaceChildren(el('p','重叠读数全部等值，无冲突柜时。','empty'));
 }
 
 export const stages = {intake, assignment, pairing, gradient, episodes, audit, archive};

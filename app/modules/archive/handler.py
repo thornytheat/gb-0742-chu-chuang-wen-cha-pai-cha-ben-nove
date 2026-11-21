@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
 from app.dependencies import Archive, Service
 from app.modules.archive.proof import export
+from app.modules.continuation.service import is_continuation_sample
 
 router = APIRouter(prefix="/api/runs")
 
@@ -17,8 +18,11 @@ def history(service: Service):
 
 
 @router.post("", status_code=201)
-def run(body: RunRequest, service: Service, response: Response):
-    result = service.run(body.sample)
+def run(body: RunRequest, request: Request, response: Response):
+    if is_continuation_sample(body.sample):
+        result = request.app.state.continuations.run(body.sample)
+    else:
+        result = request.app.state.archives.run(body.sample)
     if result["reused"]:
         response.status_code = 200
     return result
@@ -30,8 +34,11 @@ def manifest(archive: Archive):
 
 
 @router.post("/{run_id}/rerun")
-def replay(run_id: str, service: Service):
-    return service.replay(run_id)
+def replay(run_id: str, request: Request):
+    record = request.app.state.archives.store.fetch(run_id)[0]
+    if record.get("kind") == "continuation":
+        return request.app.state.continuations.replay(run_id)
+    return request.app.state.archives.replay(run_id)
 
 
 @router.get("/{run_id}/export")

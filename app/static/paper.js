@@ -8,6 +8,10 @@ export const words = {
   LOWER_CONTENTION:'下层读数占用', CI_OVERLAP:'区间跨阈值', MISSING_RH:'湿度缺证',
   UNUSED_LOWER:'未用下层', EXTRA_UPPER:'额外上层', LATE_RECEIPT:'迟报', temperature:'温度', humidity:'湿度',
   upper:'上层', lower:'下层', accepted:'采信', isolated:'隔离', header:'栏头', duplicate:'重复', blank:'空行',
+  CONTINUATION_DUPLICATE:'重叠已由后档入账', CONTINUATION_CONFLICT:'重叠读数冲突',
+  first:'先档', second:'后档', OVERLAP_SECOND_AUTHORITATIVE:'重叠柜时后档为准', FIRST_ONLY:'先档独有柜时',
+  SECOND_ONLY:'后档独有柜时', FIRST_FALLBACK:'重叠柜时后档缺证回退先档', FALLBACK_INCOMPLETE:'仅单档有读数',
+  NO_EVIDENCE:'两档均无读数',
 };
 const timeZone = 'Asia/Shanghai';
 const clock = new Intl.DateTimeFormat('zh-CN', {timeZone, hour:'2-digit',minute:'2-digit',hourCycle:'h23'});

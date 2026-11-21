@@ -9,6 +9,11 @@ REASONS = {
 
     "MISSING_UPPER": "缺上层测量", "NO_COMPATIBLE_LOWER": "无可用下层证据", "MISSING_RH": "湿度证据不足",
     "CI_OVERLAP": "置信区间跨阈值",
+    "CONTINUATION_DUPLICATE": "重叠柜时已由接续准档入账",
+    "CONTINUATION_CONFLICT": "重叠柜时同探头同刻读数冲突",
+
+    "OVERLAP_CONFLICT": "断网接续重叠读数冲突",
+    "CONTINUATION_INPUT": "接续原档或契约不完整",
 }
 
 

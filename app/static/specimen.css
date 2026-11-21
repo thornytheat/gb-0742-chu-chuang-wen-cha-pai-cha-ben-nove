@@ -70,3 +70,10 @@ sup { font: 10px var(--mono); color: var(--accent); }
 .digest-list .rule-list { grid-template-columns: minmax(70px,.35fr) minmax(0,1fr); }
 .jump-list { display: grid; gap: 4px; margin-top: 6px; }
 @media (max-width: 690px) { .cut-drawing { min-height: 298px; } }
+.continuation-panel { margin-top: var(--gap); }
+.continuation-sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--gap); margin-bottom: var(--gap); }
+.hash-stack { display: grid; gap: 2px; }
+#continuation-ledger, #continuation-conflicts { margin-top: var(--gap); }
+@media print {
+  .continuation-panel .feedback { display: block !important; border: 1px solid var(--ruling); }
+}

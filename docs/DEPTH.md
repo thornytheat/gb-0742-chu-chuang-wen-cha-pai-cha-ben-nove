@@ -13,6 +13,7 @@
 | M5 异常持续 | 定位连续与瞬时异常段及其原行 | `GET /api/runs/{run_id}/episodes/{cabinet}` | `app/modules/episodes/segment.py` | `tests/test_episodes.py` |
 | M6 值班单勾稽 | 核对柜时与图档行，查报警误报漏报 | `GET /api/runs/{run_id}/audit` | `app/modules/audit/reconcile.py` | `tests/test_audit.py` |
 | M7 证据归卷 | 运行、复算或下载带摘要的归卷 | `POST /api/runs` `POST /api/runs/{run_id}/rerun` `GET /api/runs/{run_id}/export` | `app/modules/archive/pipeline.py` `app/modules/archive/service.py` `app/modules/archive/proof.py` `app/store.py` | `tests/test_archive.py` |
+| M8 断网接续 | 两份原档合并为一版柜时账，冲突停发 | `POST /api/runs`（`continuation` 样例） `GET /api/runs/{run_id}/continuation` | `app/modules/continuation/merge.py` `app/modules/continuation/service.py` `app/manifest.py` | `tests/test_continuation.py` |
 
 ## 陷阱登记
 
@@ -34,6 +35,11 @@
 | TRAP-17 | `night-points.csv` 第二段改中文并换序 | 收报和测量栏对调 | 每段独立映射字段 | `app/modules/intake/readings.py` | `tests/test_intake.py::test_header_switch_changes_field_positions` |
 | TRAP-23 | 探头在 13:00 馆内时间换柜 | 同一时刻两柜采信 | 左闭右开选择新柜 | `app/modules/assignment/windows.py` | `tests/test_assignment.py::test_adjacent_windows_are_half_open_at_exact_move` |
 | TRAP-25 | 在混合部署契约上叠加同柜同层窗 | 任选一个探头 | 标重叠并拒用重叠段 | `app/modules/assignment/windows.py` | `tests/test_assignment.py::test_second_probe_at_same_position_marks_overlap_only` |
+| TRAP-31 | 断网恢复后重叠半小时两档同探头同刻都报数 | 同一柜时算两次，柜时账翻倍 | 等值记 `CONTINUATION_DUPLICATE`，重叠柜时后档为准只出一条账 | `app/modules/continuation/merge.py` | `tests/test_continuation.py::test_both_sources_are_preserved_but_overlap_rows_count_once` |
+| TRAP-32 | 重叠柜时个别读数两档对不上 | 任选一档或取均值，异常段被改写 | 冲突列两边量值，保留原档并 `OVERLAP_CONFLICT` 停发，不写新归卷 | `app/modules/continuation/merge.py` | `tests/test_continuation.py::test_conflicting_overlap_aborts_publication_and_keeps_previous_version` |
+| TRAP-33 | 整段只取后档 | 先档独有的上层读数作废 | 单档覆盖柜时取该档；后档缺成对证据时 `FIRST_FALLBACK` 回退先档 | `app/modules/continuation/merge.py` | `tests/test_continuation.py::test_overlap_hour_falls_back_to_first_when_second_is_unpaired` |
+| TRAP-34 | 把先档上层和后档下层拼成新配对 | 凑出原档不存在的上下层配对 | 准档以档内已配准的成对柜时为单位，禁止跨档拼装 | `app/modules/continuation/merge.py` | `tests/test_continuation.py::test_single_ledger_feeds_page_and_archive_with_balanced_hours` |
+| TRAP-35 | 同班次接续重复提交 | 归卷历史出现重复记录 | 归卷键含两份原档与契约摘要，同输入重跑返回原号 `reused` | `app/manifest.py` `app/modules/continuation/service.py` | `tests/test_continuation.py::test_rerun_same_shift_adds_no_record_and_reuses_manifest` |
 
 真实反例还有迁移前一分钟的下层读数不能与迁移后的上层配对，近中点无证读数不能挤掉同小时有效候选，区间端点的展示舍入不能改变判级，缺证切断连续异常，工单不能重复清销同一段。
 
@@ -42,3 +48,4 @@
 - 应监测柜时按键集合核对，柜时数分到稳定、异常、缺证。
 - 工单与持续异常按柜时定位，列出重复报警和未报持续段。
 - 原始 CSV、契约、规则版次确定归卷键。复算和证据导出会验证结果 SHA-256。
+- 断网接续按柜时确定唯一准档（先档/后档），两档原档全部固定进归卷；重叠冲突停发且不落库，重跑同班次不新增记录。接续柜时账的逐槽清单另存 `ledger_sha256`。
